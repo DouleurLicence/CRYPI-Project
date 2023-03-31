@@ -15,8 +15,8 @@ In this project, you will learn how to perform secure prediction using secure mu
 
 ## Materials:
 
-[TODO] a dataset
-[TODO] a trained model
+* [TODO] a dataset
+* [TODO] a trained model
 
 # Instructions:
 
