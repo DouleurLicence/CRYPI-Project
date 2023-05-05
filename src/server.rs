@@ -10,6 +10,10 @@ use std::sync::Mutex;
 
 use std::io::Write;
 
+use sha2::Sha256;
+use hmac::{Hmac, Mac};
+use hex_literal::hex;
+
 mod csv_file;
 
 // Import the generated proto-rust file into a module

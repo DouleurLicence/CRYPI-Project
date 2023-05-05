@@ -7,11 +7,18 @@ use tonic::transport::{Certificate, Channel, ClientTlsConfig, Identity};
 
 use ring::digest::{Context, Digest, SHA256};
 
+use sha2::Sha256;
+use hmac::{Hmac, Mac};
+use hex_literal::hex;
+
 mod csv_file;
 
 pub mod file {
     tonic::include_proto!("file");
 }
+
+// Create alias for HMAC-SHA256
+type HmacSha256 = Hmac<Sha256>;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -30,6 +37,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let client_cert = std::fs::read_to_string("client.crt")?;
     let client_key = std::fs::read_to_string("client.key")?;
     let client_identity = Identity::from_pem(client_cert, client_key);
+    let mut hmac = HmacSha256::new_from_slice(b"secret").expect("HMAC can take key of any size");
 
     let tls = ClientTlsConfig::new()
         .domain_name("localhost")
