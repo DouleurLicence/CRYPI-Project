@@ -1,4 +1,5 @@
-use tonic::{transport::Server, Request, Response, Status};
+use tonic::transport::{Certificate, Identity, Server, ServerTlsConfig};
+use tonic::{Request, Response, Status};
 
 use file::file_server::{File, FileServer};
 use file::{FileFinished, FileResponse, FileTransfer};
@@ -103,12 +104,24 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         return Ok(());
     }
 
+    let cert = std::fs::read_to_string("server.crt")?;
+    let key = std::fs::read_to_string("server.key")?;
+    let server_identity = Identity::from_pem(cert, key);
+
+    let client_ca_cert = std::fs::read_to_string("ca.crt")?;
+    let client_ca_cert = Certificate::from_pem(client_ca_cert);
+
     let addr = "127.0.0.1:".to_owned() + &args[1];
     let addr = addr.parse()?;
     let server = MyServer::default();
 
+    let tls = ServerTlsConfig::new()
+        .identity(server_identity)
+        .client_ca_root(client_ca_cert);
+
     println!("Hosting on port {}, waiting for commands...", args[1]);
     Server::builder()
+        .tls_config(tls)?
         .add_service(FileServer::new(server))
         .serve(addr)
         .await?;

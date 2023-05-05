@@ -3,6 +3,8 @@ use file::FileFinished;
 use file::FileRequest;
 use file::FileTransfer;
 
+use tonic::transport::{Certificate, Channel, ClientTlsConfig, Identity};
+
 mod csv_file;
 
 pub mod file {
@@ -19,9 +21,25 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         return Ok(());
     }
 
-    let addr = "http://".to_owned() + &args[1] + ":" + &args[2];
+    // let addr = "http://".to_owned() + &args[1] + ":" + &args[2];
 
-    let mut client = FileClient::connect(addr).await?;
+    let server_root_ca_cert = std::fs::read_to_string("ca.crt")?;
+    let server_root_ca_cert = Certificate::from_pem(server_root_ca_cert);
+    let client_cert = std::fs::read_to_string("client.crt")?;
+    let client_key = std::fs::read_to_string("client.key")?;
+    let client_identity = Identity::from_pem(client_cert, client_key);
+
+    let tls = ClientTlsConfig::new()
+        .domain_name("localhost")
+        .ca_certificate(server_root_ca_cert)
+        .identity(client_identity);
+
+    let channel = Channel::from_static("http://127.0.0.1:8000")
+        .tls_config(tls)?
+        .connect()
+        .await?;
+
+    let mut client = FileClient::new(channel);
 
     let filename_ = args[3].split("/").last().unwrap().to_string();
 
