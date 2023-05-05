@@ -1,6 +1,8 @@
 use tonic::transport::{Certificate, Identity, Server, ServerTlsConfig};
 use tonic::{Request, Response, Status};
 
+use ring::digest::{Context, Digest, SHA256};
+
 use file::file_server::{File, FileServer};
 use file::{FileFinished, FileResponse, FileTransfer};
 
@@ -32,6 +34,23 @@ impl File for MyServer {
     ) -> Result<Response<FileResponse>, Status> {
         let request_contents = request.into_inner();
         let file_contents = request_contents.content;
+        let client_hash = request_contents.hash; // Assuming the client sends the hash along with the content
+
+        // Before appending the received chunk to received_data,
+        // there is a checkup of its integrity using cryptographic
+        // hash functions (in this case SHA-256)
+
+        // Compute the hash of the received chunk
+        let mut context = Context::new(&SHA256);
+        context.update(&file_contents);
+        let computed_hash = context.finish();
+
+        // Verify the integrity of the chunk by comparing the computed hash with the received hash
+        if computed_hash.as_ref() != client_hash.as_slice() {
+            return Err(Status::invalid_argument(
+                "Hash mismatch, data integrity compromised",
+            ));
+        }
 
         // Append received chunk to received_data
         self.received_data.lock().unwrap().extend(file_contents);
@@ -110,6 +129,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let client_ca_cert = std::fs::read_to_string("ca.crt")?;
     let client_ca_cert = Certificate::from_pem(client_ca_cert);
+
+    // Consider implementing certificate pinning with `rustls` by providing
+    // a custom certificate verifier that checks the server's certificate
+    // against a known, trusted copy.
 
     let addr = "127.0.0.1:".to_owned() + &args[1];
     let addr = addr.parse()?;

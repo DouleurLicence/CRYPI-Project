@@ -8,6 +8,8 @@ message FileRequest {
 message FileTransfer {
   string filename = 1;
   bytes content = 2;
+  bytes hash = 3;
+
 }
 
 message FileResponse {

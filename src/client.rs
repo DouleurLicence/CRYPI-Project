@@ -5,6 +5,8 @@ use file::FileTransfer;
 
 use tonic::transport::{Certificate, Channel, ClientTlsConfig, Identity};
 
+use ring::digest::{Context, Digest, SHA256};
+
 mod csv_file;
 
 pub mod file {
@@ -78,9 +80,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("Uploading {} to the server...", filename_);
 
     for chunk in chunks {
+        // Calculate the SHA-256 hash of the chunk
+        let mut context = Context::new(&SHA256);
+        context.update(&chunk);
+        let chunk_hash = context.finish();
+
         let request = tonic::Request::new(FileTransfer {
             filename: filename_.clone(),
             content: chunk,
+            hash: chunk_hash.as_ref().to_vec(), // Include the hash in the FileTransfer message
         });
 
         response = client.send_file(request).await?;
