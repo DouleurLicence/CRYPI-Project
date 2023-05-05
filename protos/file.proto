@@ -1,0 +1,25 @@
+syntax = "proto3";
+package file;
+
+message FileRequest {
+    string filename = 1;
+}
+
+message FileTransfer {
+  string filename = 1;
+  bytes content = 2;
+}
+
+message FileResponse {
+  string message = 1;
+}
+
+message FileFinished {
+  string filename = 1;
+}
+
+service File {
+  rpc SendFile (FileTransfer) returns (FileResponse);
+  rpc PrimingSend (FileRequest) returns (FileResponse);
+  rpc FinishTransfer (FileFinished) returns (FileResponse);
+}

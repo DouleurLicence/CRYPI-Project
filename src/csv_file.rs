@@ -1,11 +1,11 @@
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use std::error::Error;
 use std::fs::File;
 use std::io::Read;
 
 use csv::ReaderBuilder;
 
-#[derive(Debug, Deserialize)]
+#[derive(Serialize, Deserialize, Debug)]
 pub struct Record {
     pub male: u32,
     pub age: u32,
