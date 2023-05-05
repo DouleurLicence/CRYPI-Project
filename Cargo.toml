@@ -9,3 +9,5 @@ edition = "2021"
 csv = "1.2.1"
 ndarray = "0.15.6"
 serde = { version = "1.0.130", features = ["derive"] }
+ciphercore-base = "0.2.0"
+serde_json = "1.0.96"

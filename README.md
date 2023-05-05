@@ -46,3 +46,19 @@ Think about potential use cases for secure prediction with secure multiparty com
 - Ensuring model confidentiality: the data owner must not gain any knowledge about the trained model.
 - Ensuring data confidentiality: the model owner must not gain any knowledge about the data to predict.
 - Ensuring prediction confidentiality: the model owner must not gain any knowledge about the prediction.
+
+
+### Deliverables:
+
+How to compile and run the code ? First, you'll need to install a few dependencies:
+
+```bash
+sudo apt install libssl-dev
+sudo apt install pkg-config
+```
+
+Then, you can compile and run the code:
+
+```bash
+cargo run
+```
