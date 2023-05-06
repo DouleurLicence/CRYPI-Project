@@ -7,9 +7,9 @@ use tonic::transport::{Certificate, Channel, ClientTlsConfig, Identity};
 
 use ring::digest::{Context, Digest, SHA256};
 
-use sha2::Sha256;
-use hmac::{Hmac, Mac};
 use hex_literal::hex;
+use hmac::{Hmac, Mac};
+use sha2::Sha256;
 
 mod csv_file;
 
@@ -51,7 +51,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let filepath_arg = args[3].clone(); // Create a separate variable to store the clone
     let filepath = std::path::Path::new(&filepath_arg); // Pass the reference to the new variable
-    // Keep only the filename
+                                                        // Keep only the filename
     let filename_ = filepath.file_name().unwrap().to_str().unwrap().to_string();
 
     println!("Filename: {}", filename_);

@@ -42,7 +42,6 @@ pub fn read_csv_file(path: String) -> Result<Vec<Record>, Box<dyn Error>> {
     return Ok(records);
 }
 
-
 pub fn write_csv_file(records: Vec<Record>, path: &str) -> Result<(), Box<dyn Error>> {
     let file = File::create(path)?;
     let mut writer = WriterBuilder::new().from_writer(file);

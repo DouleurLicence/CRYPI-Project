@@ -17,6 +17,7 @@ path = "src/client.rs"
 csv = "1.2.1"
 ndarray = "0.15.6"
 serde = { version = "1.0.130", features = ["derive"] }
+serde_derive = "1.0"
 tonic = { version = "0.7", features = ["transport", "codegen", "prost", "tls-roots", "tls"] }
 prost = "0.10.1"
 tokio = { version = "1.21", features = ["macros", "rt-multi-thread"] }
@@ -25,6 +26,11 @@ ring = "0.16.20"
 sha2 = "0.10.6"
 hmac = "0.12.1"
 hex-literal = "0.4.1"
+ndarray-csv = "0.5.1"
+ndarray-rand = "0.14.0"
+ndarray-stats = "0.5"
+ndarray-npy = "0.7"
+statrs = "0.16.0"
 
 [build-dependencies]
 tonic-build = "0.7"

@@ -10,14 +10,16 @@ use std::sync::Mutex;
 
 use std::io::Write;
 
-use sha2::Sha256;
-use hmac::{Hmac, Mac};
 use hex_literal::hex;
+use hmac::{Hmac, Mac};
+use sha2::Sha256;
 
 // Create alias for HMAC-SHA256
 type HmacSha256 = Hmac<Sha256>;
 
 mod csv_file;
+mod normalize;
+mod training;
 
 // Import the generated proto-rust file into a module
 pub mod file {
@@ -84,7 +86,8 @@ impl File for MyServer {
         let mut received_data = self.received_data.lock().unwrap();
 
         // Create an HMAC instance with the same key
-        let mut hmac = HmacSha256::new_from_slice(b"secret").expect("HMAC can take key of any size");
+        let mut hmac =
+            HmacSha256::new_from_slice(b"secret").expect("HMAC can take key of any size");
 
         // Compute the HMAC hash of the received data
         hmac.update(&*received_data);
