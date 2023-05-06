@@ -4,6 +4,7 @@ use std::fs::File;
 use std::io::Read;
 
 use csv::ReaderBuilder;
+use csv::WriterBuilder;
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct Record {
@@ -39,4 +40,20 @@ pub fn read_csv_file(path: String) -> Result<Vec<Record>, Box<dyn Error>> {
     }
 
     return Ok(records);
+}
+
+
+pub fn write_csv_file(records: Vec<Record>, path: &str) -> Result<(), Box<dyn Error>> {
+    let file = File::create(path)?;
+    let mut writer = WriterBuilder::new().from_writer(file);
+
+    // Write the records
+    for record in records {
+        writer.serialize(&record)?;
+    }
+
+    // Flush the writer to ensure all data is written to the file
+    writer.flush()?;
+
+    Ok(())
 }

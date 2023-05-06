@@ -14,6 +14,9 @@ use sha2::Sha256;
 use hmac::{Hmac, Mac};
 use hex_literal::hex;
 
+// Create alias for HMAC-SHA256
+type HmacSha256 = Hmac<Sha256>;
+
 mod csv_file;
 
 // Import the generated proto-rust file into a module
@@ -70,13 +73,38 @@ impl File for MyServer {
         &self,
         request: Request<FileFinished>,
     ) -> Result<Response<FileResponse>, Status> {
+        let request_contents = request.into_inner();
         // Get the filename
-        let filename = request.into_inner().filename;
+        let filename = request_contents.filename;
+        let received_hmac_hash = request_contents.hmac_hash;
 
-        // Deserialize the received data
+        println!("{} received", filename);
+        println!("Checking integrity...");
+
         let mut received_data = self.received_data.lock().unwrap();
-        let records: Vec<csv_file::Record> = bincode::deserialize(&*received_data).unwrap();
-        println!("{} received and saved.", filename);
+
+        // Create an HMAC instance with the same key
+        let mut hmac = HmacSha256::new_from_slice(b"secret").expect("HMAC can take key of any size");
+
+        // Compute the HMAC hash of the received data
+        hmac.update(&*received_data);
+        let computed_hmac_hash = hmac.finalize().into_bytes().to_vec();
+
+        // Verify the integrity of the entire file by comparing the computed HMAC hash with the received HMAC hash
+        if computed_hmac_hash != received_hmac_hash {
+            return Err(Status::invalid_argument(
+                "HMAC hash mismatch, data integrity compromised",
+            ));
+        }
+
+        println!("Integrity OK");
+
+        // Deserialize the received data into a vector of CSV records
+        let content_deserialized = bincode::deserialize::<Vec<csv_file::Record>>(&*received_data)
+            .expect("Failed to deserialize");
+
+        // Write the deserialized data to a CSV file
+        csv_file::write_csv_file(content_deserialized, &filename);
 
         // Clear the received_data for future transfers
         received_data.clear();

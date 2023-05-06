@@ -18,6 +18,7 @@ message FileResponse {
 
 message FileFinished {
   string filename = 1;
+  bytes hmac_hash = 2;
 }
 
 service File {

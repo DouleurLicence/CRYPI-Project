@@ -30,8 +30,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         return Ok(());
     }
 
-    // let addr = "http://".to_owned() + &args[1] + ":" + &args[2];
-
     let server_root_ca_cert = std::fs::read_to_string("ca.crt")?;
     let server_root_ca_cert = Certificate::from_pem(server_root_ca_cert);
     let client_cert = std::fs::read_to_string("client.crt")?;
@@ -51,7 +49,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let mut client = FileClient::new(channel);
 
-    let filename_ = args[3].split("/").last().unwrap().to_string();
+    let filepath_arg = args[3].clone(); // Create a separate variable to store the clone
+    let filepath = std::path::Path::new(&filepath_arg); // Pass the reference to the new variable
+    // Keep only the filename
+    let filename_ = filepath.file_name().unwrap().to_str().unwrap().to_string();
+
+    println!("Filename: {}", filename_);
 
     // Check if the file is a CSV file
     if !filename_.ends_with(".csv") {
@@ -110,8 +113,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     }
 
+    // Compute the HMAC hash of the entire serialized file
+    hmac.update(&serialized_data);
+    let hmac_hash = hmac.finalize().into_bytes().to_vec();
+
     let newrequest = tonic::Request::new(FileFinished {
         filename: filename_.to_string(),
+        hmac_hash: hmac_hash,
     });
 
     client.finish_transfer(newrequest).await?;
