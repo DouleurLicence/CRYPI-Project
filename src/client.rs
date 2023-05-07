@@ -20,38 +20,15 @@ pub mod file {
 // Create alias for HMAC-SHA256
 type HmacSha256 = Hmac<Sha256>;
 
-#[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    // Get the args passed to the program
-    let args: Vec<String> = std::env::args().collect();
-
-    if args.len() != 4 {
-        println!("Usage: {} <host> <port> <file>", args[0]);
-        return Ok(());
-    }
-
-    let server_root_ca_cert = std::fs::read_to_string("ca.crt")?;
-    let server_root_ca_cert = Certificate::from_pem(server_root_ca_cert);
-    let client_cert = std::fs::read_to_string("client.crt")?;
-    let client_key = std::fs::read_to_string("client.key")?;
-    let client_identity = Identity::from_pem(client_cert, client_key);
-    let mut hmac = HmacSha256::new_from_slice(b"secret").expect("HMAC can take key of any size");
-
-    let tls = ClientTlsConfig::new()
-        .domain_name("localhost")
-        .ca_certificate(server_root_ca_cert)
-        .identity(client_identity);
-
-    let channel = Channel::from_static("http://127.0.0.1:8000")
-        .tls_config(tls)?
-        .connect()
-        .await?;
-
-    let mut client = FileClient::new(channel);
-
-    let filepath_arg = args[3].clone(); // Create a separate variable to store the clone
-    let filepath = std::path::Path::new(&filepath_arg); // Pass the reference to the new variable
-                                                        // Keep only the filename
+// Function to upload file to server
+async fn upload_file(
+    client: &mut FileClient<Channel>,
+    file_path: &str,
+    train: bool,
+    hmac: &mut HmacSha256,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let filepath = std::path::Path::new(&file_path);
+    // Keep only the filename
     let filename_ = filepath.file_name().unwrap().to_str().unwrap().to_string();
 
     println!("Filename: {}", filename_);
@@ -63,7 +40,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     // Read the file
-    let content = csv_file::read_csv_file(args[3].clone())?;
+    let content = csv_file::read_csv_file(file_path.to_string())?;
     // Serialize the records using bincode
     let serialized_data = bincode::serialize(&content)?;
     // Split the file into chunks of data to send
@@ -115,7 +92,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Compute the HMAC hash of the entire serialized file
     hmac.update(&serialized_data);
-    let hmac_hash = hmac.finalize().into_bytes().to_vec();
+    let hmac_hash = hmac.clone().finalize().into_bytes().to_vec();
 
     let newrequest = tonic::Request::new(FileFinished {
         filename: filename_.to_string(),
@@ -125,6 +102,161 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     client.finish_transfer(newrequest).await?;
 
     println!("File uploaded successfully!");
+    Ok(())
+}
+
+async fn launch_prediction(
+    client: &mut FileClient<Channel>,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let request = tonic::Request::new(FileRequest {
+        filename: "prediction".to_string(),
+    });
+
+    let mut response = client.priming_send(request).await?;
+
+    match response.into_inner().message.as_str() {
+        "OK" => (),
+        _ => {
+            println!("Error during the priming of the transfer");
+            return Ok(());
+        }
+    }
+
+    println!("Launching prediction...");
+
+    let request = tonic::Request::new(FileFinished {
+        filename: "prediction".to_string(),
+        hmac_hash: Vec::new(),
+    });
+
+    response = client.finish_transfer(request).await?;
+
+    match response.into_inner().message.as_str() {
+        "OK" => (),
+        _ => {
+            println!("Error during the prediction");
+            return Ok(());
+        }
+    }
+
+    println!("Prediction launched successfully!");
+    Ok(())
+}
+
+async fn launch_training(
+    client: &mut FileClient<Channel>,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let request = tonic::Request::new(FileRequest {
+        filename: "training".to_string(),
+    });
+
+    let mut response = client.priming_send(request).await?;
+
+    match response.into_inner().message.as_str() {
+        "OK" => (),
+        _ => {
+            println!("Error during the priming of the transfer");
+            return Ok(());
+        }
+    }
+
+    println!("Launching training...");
+
+    let request = tonic::Request::new(FileFinished {
+        filename: "training".to_string(),
+        hmac_hash: Vec::new(),
+    });
+
+    response = client.finish_transfer(request).await?;
+
+    match response.into_inner().message.as_str() {
+        "OK" => (),
+        _ => {
+            println!("Error during the training");
+            return Ok(());
+        }
+    }
+
+    println!("Training launched successfully!");
+    Ok(())
+}
+
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    // Get the args passed to the program
+    let args: Vec<String> = std::env::args().collect();
+
+    if args.len() != 3 {
+        println!("Usage: {} <host> <port>", args[0]);
+        return Ok(());
+    }
+
+    let server_root_ca_cert = std::fs::read_to_string("ca.crt")?;
+    let server_root_ca_cert = Certificate::from_pem(server_root_ca_cert);
+    let client_cert = std::fs::read_to_string("client.crt")?;
+    let client_key = std::fs::read_to_string("client.key")?;
+    let client_identity = Identity::from_pem(client_cert, client_key);
+    let mut hmac = HmacSha256::new_from_slice(b"secret").expect("HMAC can take key of any size");
+
+    let tls = ClientTlsConfig::new()
+        .domain_name("localhost")
+        .ca_certificate(server_root_ca_cert)
+        .identity(client_identity);
+
+    let channel = Channel::from_static("http://127.0.0.1:8000")
+        .tls_config(tls)?
+        .connect()
+        .await?;
+
+    let mut client = FileClient::new(channel);
+
+    let mut choice = String::new();
+    // Put the number 0 in choice to enter the loop
+    choice.push('0');
+
+    while choice.trim().parse::<u32>()? != 5 {
+        // Ask the user what does he want to do with the server
+        println!("What do you want to do?");
+        println!("1. Upload a file for training");
+        println!("2. Upload a file for prediction");
+        println!("3. Launch the training");
+        println!("4. Launch the prediction");
+        println!("5. Exit");
+
+        std::io::stdin().read_line(&mut choice)?;
+
+        match choice.trim().parse::<u32>() {
+            Ok(1 | 2) => {
+                // Ask the user for the name of the file to upload
+                println!("Enter the path of the file to upload:");
+                let mut filepath = String::new();
+                std::io::stdin().read_line(&mut filepath)?;
+                // Upload a file for training
+                upload_file(
+                    &mut client,
+                    filepath.trim(),
+                    choice.trim().parse::<u32>()? == 1,
+                    &mut hmac,
+                )
+                .await?;
+            }
+            Ok(3) => {
+                // Launch the training
+                launch_training(&mut client).await?;
+            }
+            Ok(4) => {
+                // Launch the prediction
+                launch_prediction(&mut client).await?;
+            }
+            Ok(5) => {
+                // Exit the program
+                println!("Exiting...");
+            }
+            _ => {
+                println!("Invalid choice!");
+            }
+        }
+    }
 
     Ok(())
 }

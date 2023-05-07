@@ -6,7 +6,7 @@ use std::io::Read;
 use csv::ReaderBuilder;
 use csv::WriterBuilder;
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct Record {
     pub male: u32,
     pub age: u32,

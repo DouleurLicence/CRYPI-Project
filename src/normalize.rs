@@ -1,7 +1,7 @@
 use crate::csv_file::Record;
+use ndarray::s;
 use ndarray::{Array, Array1, Array2, Axis};
 use std::error::Error;
-use ndarray::s;
 
 // Normalize data using min-max normalization
 pub fn normalize_data(records: &[Record]) -> Result<Array2<f32>, Box<dyn Error>> {
@@ -56,7 +56,7 @@ fn impute_nan_with_mean(column: &mut Array1<f64>) {
     column.mapv_inplace(|x| if x.is_nan() { mean } else { x });
 }
 
-fn clean_dataset(records: Vec<Record>) -> (Array2<f64>, Array1<f64>, Array2<f64>, Array1<f64>) {
+pub fn clean_dataset(records: Vec<Record>) -> (Array2<f64>, Array1<f64>, Array2<f64>, Array1<f64>) {
     // Convert the records to an ndarray Array2<f64>
     let data = Array2::from_shape_fn((records.len(), 15), |(i, j)| match j {
         0 => records[i].male as f64,
@@ -98,5 +98,5 @@ fn clean_dataset(records: Vec<Record>) -> (Array2<f64>, Array1<f64>, Array2<f64>
     let X_test = X.select(Axis(0), &test_indices);
     let y_test = y.select(Axis(0), &test_indices);
 
-    return (X_train, y_train, X_test, y_test)
+    return (X_train, y_train, X_test, y_test);
 }

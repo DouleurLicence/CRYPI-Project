@@ -106,6 +106,12 @@ impl File for MyServer {
         let content_deserialized = bincode::deserialize::<Vec<csv_file::Record>>(&*received_data)
             .expect("Failed to deserialize");
 
+        let (X_train, y_train, X_test, y_test) =
+            normalize::clean_dataset(content_deserialized.clone());
+        let model = training::train_log_reg(&X_train, &y_train);
+        let accuracy = training::model_accuracy(&model.to_owned(), &X_test, &y_test);
+        println!("Accuracy: {}", accuracy);
+
         // Write the deserialized data to a CSV file
         csv_file::write_csv_file(content_deserialized, &filename);
 
