@@ -3,13 +3,32 @@ package file;
 
 message FileRequest {
     string filename = 1;
+    bool train = 2;
+    bool coefs = 3;
 }
 
 message FileTransfer {
   string filename = 1;
   bytes content = 2;
   bytes hash = 3;
+}
 
+message RequestTraining{
+  bool train = 2;
+}
+
+message ResponseAccuracy {
+  string message = 1;
+  float accuracy = 2;
+}
+
+message RequestPrediction {
+  bool predict = 2;
+}
+
+message ResponsePrediction {
+  string message = 1;
+  string prediction = 2;
 }
 
 message FileResponse {
@@ -25,4 +44,6 @@ service File {
   rpc SendFile (FileTransfer) returns (FileResponse);
   rpc PrimingSend (FileRequest) returns (FileResponse);
   rpc FinishTransfer (FileFinished) returns (FileResponse);
+  rpc LaunchTraining (RequestTraining) returns (ResponseAccuracy);
+  rpc LaunchPrediction (RequestPrediction) returns (ResponsePrediction);
 }

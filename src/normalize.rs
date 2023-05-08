@@ -1,11 +1,11 @@
 use crate::csv_file::Record;
 use ndarray::s;
-use ndarray::{Array, Array1, Array2, Axis};
+use ndarray::{Array1, Array2, Axis};
 use std::error::Error;
 
 // Normalize data using min-max normalization
 pub fn normalize_data(records: &[Record]) -> Result<Array2<f32>, Box<dyn Error>> {
-    let mut data: Vec<Vec<f32>> = records
+    let data: Vec<Vec<f32>> = records
         .iter()
         .map(|record| {
             vec![

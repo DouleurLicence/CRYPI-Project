@@ -2,12 +2,14 @@ use file::file_client::FileClient;
 use file::FileFinished;
 use file::FileRequest;
 use file::FileTransfer;
+use file::RequestPrediction;
+use file::RequestTraining;
 
+use prost::encoding::bool;
 use tonic::transport::{Certificate, Channel, ClientTlsConfig, Identity};
 
-use ring::digest::{Context, Digest, SHA256};
+use ring::digest::{Context, SHA256};
 
-use hex_literal::hex;
 use hmac::{Hmac, Mac};
 use sha2::Sha256;
 
@@ -30,12 +32,15 @@ async fn upload_file(
     let filepath = std::path::Path::new(&file_path);
     // Keep only the filename
     let filename_ = filepath.file_name().unwrap().to_str().unwrap().to_string();
-
     println!("Filename: {}", filename_);
 
     // Check if the file is a CSV file
-    if !filename_.ends_with(".csv") {
+    if train && !filename_.ends_with(".csv") {
         println!("The file must be a CSV file!");
+        return Ok(());
+    }
+    if !train && !filename_.ends_with(".txt") {
+        println!("The file must be a TXT file!");
         return Ok(());
     }
 
@@ -49,10 +54,10 @@ async fn upload_file(
         .map(|chunk| chunk.to_vec())
         .collect::<Vec<_>>();
 
-    // Send a first request with the filename to ammorce the transfer
-
     let request = tonic::Request::new(FileRequest {
         filename: filename_.to_string(),
+        train: train,
+        coefs: filename_.ends_with(".txt"),
     });
 
     let mut response = client.priming_send(request).await?;
@@ -105,79 +110,31 @@ async fn upload_file(
     Ok(())
 }
 
-async fn launch_prediction(
+async fn start_prediction(
     client: &mut FileClient<Channel>,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let request = tonic::Request::new(FileRequest {
-        filename: "prediction".to_string(),
-    });
+    let request = tonic::Request::new(RequestPrediction { predict: true });
 
-    let mut response = client.priming_send(request).await?;
+    let response = client.launch_prediction(request).await?;
 
-    match response.into_inner().message.as_str() {
-        "OK" => (),
-        _ => {
-            println!("Error during the priming of the transfer");
-            return Ok(());
-        }
-    }
+    // Print the response
+    println!("RESPONSE={:?}", response);
 
-    println!("Launching prediction...");
-
-    let request = tonic::Request::new(FileFinished {
-        filename: "prediction".to_string(),
-        hmac_hash: Vec::new(),
-    });
-
-    response = client.finish_transfer(request).await?;
-
-    match response.into_inner().message.as_str() {
-        "OK" => (),
-        _ => {
-            println!("Error during the prediction");
-            return Ok(());
-        }
-    }
-
-    println!("Prediction launched successfully!");
     Ok(())
 }
 
-async fn launch_training(
+async fn start_training(
     client: &mut FileClient<Channel>,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let request = tonic::Request::new(FileRequest {
-        filename: "training".to_string(),
-    });
-
-    let mut response = client.priming_send(request).await?;
-
-    match response.into_inner().message.as_str() {
-        "OK" => (),
-        _ => {
-            println!("Error during the priming of the transfer");
-            return Ok(());
-        }
-    }
-
     println!("Launching training...");
 
-    let request = tonic::Request::new(FileFinished {
-        filename: "training".to_string(),
-        hmac_hash: Vec::new(),
-    });
+    let request = tonic::Request::new(RequestTraining { train: true });
 
-    response = client.finish_transfer(request).await?;
+    let response = client.launch_training(request).await?;
 
-    match response.into_inner().message.as_str() {
-        "OK" => (),
-        _ => {
-            println!("Error during the training");
-            return Ok(());
-        }
-    }
+    // Print the response
+    println!("RESPONSE={:?}", response);
 
-    println!("Training launched successfully!");
     Ok(())
 }
 
@@ -214,19 +171,20 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Put the number 0 in choice to enter the loop
     choice.push('0');
 
-    while choice.trim().parse::<u32>()? != 5 {
+    loop {
         // Ask the user what does he want to do with the server
         println!("What do you want to do?");
         println!("1. Upload a file for training");
         println!("2. Upload a file for prediction");
-        println!("3. Launch the training");
-        println!("4. Launch the prediction");
-        println!("5. Exit");
+        println!("3. Upload a trained model");
+        println!("4. Launch the training");
+        println!("5. Launch the prediction");
+        println!("6. Exit");
 
         std::io::stdin().read_line(&mut choice)?;
 
         match choice.trim().parse::<u32>() {
-            Ok(1 | 2) => {
+            Ok(1 | 2 | 3) => {
                 // Ask the user for the name of the file to upload
                 println!("Enter the path of the file to upload:");
                 let mut filepath = String::new();
@@ -240,23 +198,24 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 )
                 .await?;
             }
-            Ok(3) => {
-                // Launch the training
-                launch_training(&mut client).await?;
-            }
             Ok(4) => {
-                // Launch the prediction
-                launch_prediction(&mut client).await?;
+                // Launch the training
+                start_training(&mut client).await?;
             }
             Ok(5) => {
+                // Launch the prediction
+                start_prediction(&mut client).await?;
+            }
+            Ok(6) => {
                 // Exit the program
                 println!("Exiting...");
+                return Ok(());
             }
             _ => {
                 println!("Invalid choice!");
             }
         }
+        // clear the choice variable
+        choice.clear();
     }
-
-    Ok(())
 }

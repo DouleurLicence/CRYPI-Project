@@ -1,7 +1,11 @@
+use ndarray::Array1;
 use serde::{Deserialize, Serialize};
 use std::error::Error;
 use std::fs::File;
+use std::io::BufRead;
+use std::io::BufReader;
 use std::io::Read;
+use std::path::Path;
 
 use csv::ReaderBuilder;
 use csv::WriterBuilder;
@@ -55,4 +59,20 @@ pub fn write_csv_file(records: Vec<Record>, path: &str) -> Result<(), Box<dyn Er
     writer.flush()?;
 
     Ok(())
+}
+
+pub fn read_file_to_array1(filename: &str) -> Result<Array1<f64>, Box<dyn std::error::Error>> {
+    let path = Path::new(filename);
+    let file = File::open(&path)?;
+    let reader = BufReader::new(file);
+
+    let mut data = Vec::new();
+
+    for line in reader.lines() {
+        let line = line?;
+        let value: f64 = line.trim().parse()?;
+        data.push(value);
+    }
+
+    Ok(Array1::from(data))
 }

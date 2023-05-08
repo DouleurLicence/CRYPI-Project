@@ -1,7 +1,10 @@
+use ndarray::{Array1, ArrayBase};
 use tonic::transport::{Certificate, Identity, Server, ServerTlsConfig};
 use tonic::{Request, Response, Status};
 
-use ring::digest::{Context, Digest, SHA256};
+use ring::digest::{Context, SHA256};
+
+use bincode::{deserialize, serialize};
 
 use file::file_server::{File, FileServer};
 use file::{FileFinished, FileResponse, FileTransfer};
@@ -10,7 +13,6 @@ use std::sync::Mutex;
 
 use std::io::Write;
 
-use hex_literal::hex;
 use hmac::{Hmac, Mac};
 use sha2::Sha256;
 
@@ -31,6 +33,9 @@ pub mod file {
 #[derive(Debug, Default)]
 pub struct MyServer {
     received_data: Mutex<Vec<u8>>,
+    coefs_path: Mutex<String>,
+    training_file: Mutex<String>,
+    prediction_file: Mutex<String>,
 }
 
 // Implement the service function(s) defined in the proto
@@ -103,14 +108,8 @@ impl File for MyServer {
         println!("Integrity OK");
 
         // Deserialize the received data into a vector of CSV records
-        let content_deserialized = bincode::deserialize::<Vec<csv_file::Record>>(&*received_data)
-            .expect("Failed to deserialize");
-
-        let (X_train, y_train, X_test, y_test) =
-            normalize::clean_dataset(content_deserialized.clone());
-        let model = training::train_log_reg(&X_train, &y_train);
-        let accuracy = training::model_accuracy(&model.to_owned(), &X_test, &y_test);
-        println!("Accuracy: {}", accuracy);
+        let content_deserialized =
+            deserialize::<Vec<csv_file::Record>>(&*received_data).expect("Failed to deserialize");
 
         // Write the deserialized data to a CSV file
         csv_file::write_csv_file(content_deserialized, &filename);
@@ -129,7 +128,30 @@ impl File for MyServer {
         request: Request<file::FileRequest>,
     ) -> Result<Response<file::FileResponse>, Status> {
         // Get the filename from the request
-        let filename = request.into_inner().filename;
+        let request_contents = request.into_inner();
+        let filename = request_contents.filename;
+        let training = request_contents.train;
+        let coefs = request_contents.coefs;
+
+        // Saving of whatever type the client sends
+        if training {
+            self.training_file
+                .lock()
+                .unwrap()
+                .push_str(&filename.to_string());
+        } else {
+            if coefs {
+                self.coefs_path
+                    .lock()
+                    .unwrap()
+                    .push_str(&filename.to_string());
+            } else {
+                self.prediction_file
+                    .lock()
+                    .unwrap()
+                    .push_str(&filename.to_string());
+            }
+        }
 
         // Create a file with the filename
         let mut file = std::fs::File::create(&filename)?;
@@ -150,6 +172,62 @@ impl File for MyServer {
                 Ok(Response::new(response))
             }
         }
+    }
+
+    async fn launch_training(
+        &self,
+        request: Request<file::RequestTraining>,
+    ) -> Result<Response<file::ResponseAccuracy>, Status> {
+        let mut message = String::from("");
+        let mut accuracy = 0.0;
+        if self.training_file.lock().unwrap().is_empty() {
+            message = "The training dataset is missing".to_string();
+        } else {
+            let content =
+                csv_file::read_csv_file(self.training_file.lock().unwrap().to_string())
+                    .map_err(|e| Status::internal(format!("Failed to read CSV file: {}", e)))?;
+
+            let (X_train, y_train, X_test, y_test) = normalize::clean_dataset(content.to_owned());
+            let model = training::train_log_reg(&X_train, &y_train);
+            accuracy = training::model_accuracy(&model.to_owned(), &X_test, &y_test);
+            println!("Accuracy: {}", accuracy);
+        }
+
+        let response = file::ResponseAccuracy {
+            message: message.into(),
+            accuracy: accuracy as f32,
+        };
+
+        Ok(Response::new(response))
+    }
+
+    async fn launch_prediction(
+        &self,
+        request: Request<file::RequestPrediction>,
+    ) -> Result<Response<file::ResponsePrediction>, Status> {
+        let mut message = String::from("");
+        let mut prediction: Array1<f64> = ArrayBase::zeros(0);
+        if self.prediction_file.lock().unwrap().is_empty() {
+            message = "The testing dataset is missing".to_string();
+        } else if self.coefs_path.lock().unwrap().is_empty() {
+            message = "The model coefficients are missing".to_string();
+        } else {
+            let content = csv_file::read_csv_file(self.prediction_file.lock().unwrap().to_string())
+                .map_err(|e| Status::internal(format!("Failed to read CSV file: {}", e)))?;
+            let model = csv_file::read_file_to_array1(&self.coefs_path.lock().unwrap())
+                .map_err(|e| Status::internal(format!("Failed to read txt file: {}", e)))?;
+
+            let (X_train, y_train, X_test, y_test) = normalize::clean_dataset(content.to_owned());
+
+            let prediction = training::predict(&model.to_owned(), &X_test);
+        }
+
+        let response = file::ResponsePrediction {
+            message: message.into(),
+            prediction: serde_json::to_string(&prediction).unwrap(),
+        };
+
+        Ok(Response::new(response))
     }
 }
 

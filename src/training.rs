@@ -1,10 +1,4 @@
-use csv;
-use ndarray::{Array, Array1, Array2, Axis};
-use ndarray_csv::{Array2Reader, Array2Writer};
-use ndarray_rand::rand_distr::Uniform;
-use ndarray_rand::RandomExt;
-use serde::Deserialize;
-use statrs::distribution::Normal;
+use ndarray::{Array, Array1, Array2};
 
 pub fn sigmoid(z: &Array1<f64>) -> Array1<f64> {
     let one: f64 = 1.0;
