@@ -1,0 +1,10 @@
+version: "3.9"
+
+services:
+  rust-server:
+    build: .
+    ports:
+      - "28015:28015/tcp"
+    volumes:
+      - .:/server
+    command: ["./target/release/server"]

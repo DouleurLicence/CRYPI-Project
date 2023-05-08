@@ -55,8 +55,12 @@ How to compile and run the code ? First, you'll need to install a few dependenci
 ```bash
 sudo apt install libssl-dev
 sudo apt install pkg-config
+sudo apt install cmake
 ```
-
+run
+```bash
+certficate.sh
+```
 Then, you can compile and run the code:
 
 ```bash
