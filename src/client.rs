@@ -5,6 +5,8 @@ use file::FileTransfer;
 use file::RequestPrediction;
 use file::RequestTraining;
 
+use http::uri::Uri;
+
 use prost::encoding::bool;
 use tonic::transport::{Certificate, Channel, ClientTlsConfig, Identity};
 
@@ -161,6 +163,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         return Ok(());
     }
 
+    let host = &args[1];
+    let port = &args[2];
+
     let server_root_ca_cert = std::fs::read_to_string("ca.crt")?;
     let server_root_ca_cert = Certificate::from_pem(server_root_ca_cert);
     let client_cert = std::fs::read_to_string("client.crt")?;
@@ -172,10 +177,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .ca_certificate(server_root_ca_cert)
         .identity(client_identity);
 
-    let channel = Channel::from_static("http://127.0.0.1:8000")
-        .tls_config(tls)?
-        .connect()
-        .await?;
+    let uri: Uri = format!("http://{}:{}", host, port).parse()?;
+    let channel = Channel::builder(uri).tls_config(tls)?.connect().await?;
 
     let mut client = FileClient::new(channel);
 
