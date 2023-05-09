@@ -4,7 +4,9 @@ use std::error::Error;
 use std::fs::File;
 use std::io::BufRead;
 use std::io::BufReader;
+use std::io::BufWriter;
 use std::io::Read;
+use std::io::Write;
 use std::path::Path;
 
 use csv::ReaderBuilder;
@@ -57,6 +59,18 @@ pub fn write_csv_file(records: Vec<Record>, path: &str) -> Result<(), Box<dyn Er
 
     // Flush the writer to ensure all data is written to the file
     writer.flush()?;
+
+    Ok(())
+}
+
+pub fn write_array1_to_file(array: &Array1<f64>, filename: &str) -> Result<(), Box<dyn Error>> {
+    let path = Path::new(filename);
+    let file = File::create(&path)?;
+    let mut writer = BufWriter::new(file);
+
+    for value in array.iter() {
+        writer.write_all(format!("{}\n", value).as_bytes())?;
+    }
 
     Ok(())
 }

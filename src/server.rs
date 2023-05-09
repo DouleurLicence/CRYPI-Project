@@ -4,7 +4,7 @@ use tonic::{Request, Response, Status};
 
 use ring::digest::{Context, SHA256};
 
-use bincode::{deserialize, serialize};
+use bincode::deserialize;
 
 use file::file_server::{File, FileServer};
 use file::{FileFinished, FileResponse, FileTransfer};
@@ -36,6 +36,7 @@ pub struct MyServer {
     coefs_path: Mutex<String>,
     training_file: Mutex<String>,
     prediction_file: Mutex<String>,
+    hmac_hash: Mutex<Vec<u8>>,
 }
 
 // Implement the service function(s) defined in the proto
@@ -90,13 +91,13 @@ impl File for MyServer {
 
         let mut received_data = self.received_data.lock().unwrap();
 
-        // Create an HMAC instance with the same key
+        // Create a new HMAC instance for this file transfer
         let mut hmac =
             HmacSha256::new_from_slice(b"secret").expect("HMAC can take key of any size");
 
         // Compute the HMAC hash of the received data
-        hmac.update(&*received_data);
-        let computed_hmac_hash = hmac.finalize().into_bytes().to_vec();
+        hmac.update(&received_data);
+        let mut computed_hmac_hash = hmac.clone().finalize().into_bytes().to_vec();
 
         // Verify the integrity of the entire file by comparing the computed HMAC hash with the received HMAC hash
         if computed_hmac_hash != received_hmac_hash {
@@ -107,15 +108,28 @@ impl File for MyServer {
 
         println!("Integrity OK");
 
-        // Deserialize the received data into a vector of CSV records
-        let content_deserialized =
-            deserialize::<Vec<csv_file::Record>>(&*received_data).expect("Failed to deserialize");
+        // if it is a csv file then deserialize it and write it to a csv file
+        if filename.ends_with(".csv") {
+            // Deserialize the received data into a vector of CSV records
+            let content_deserialized = deserialize::<Vec<csv_file::Record>>(&*received_data)
+                .expect("Failed to deserialize");
 
-        // Write the deserialized data to a CSV file
-        csv_file::write_csv_file(content_deserialized, &filename);
+            // Write the deserialized data to a CSV file
+            csv_file::write_csv_file(content_deserialized, &filename);
+        }
+
+        if filename.ends_with(".txt") {
+            // Deserialize the received data into a vector of CSV records
+            let content_deserialized =
+                deserialize::<Array1<f64>>(&*received_data).expect("Failed to deserialize");
+
+            // Write the deserialized data to a txt file
+            csv_file::write_array1_to_file(&content_deserialized, &filename);
+        }
 
         // Clear the received_data for future transfers
         received_data.clear();
+        computed_hmac_hash.clear();
 
         let response = file::FileResponse {
             message: format!("OK").into(),
@@ -176,7 +190,7 @@ impl File for MyServer {
 
     async fn launch_training(
         &self,
-        request: Request<file::RequestTraining>,
+        _request: Request<file::RequestTraining>,
     ) -> Result<Response<file::ResponseAccuracy>, Status> {
         let mut message = String::from("");
         let mut accuracy = 0.0;
@@ -203,10 +217,10 @@ impl File for MyServer {
 
     async fn launch_prediction(
         &self,
-        request: Request<file::RequestPrediction>,
+        _request: Request<file::RequestPrediction>,
     ) -> Result<Response<file::ResponsePrediction>, Status> {
         let mut message = String::from("");
-        let mut prediction: Array1<f64> = ArrayBase::zeros(0);
+        let prediction: Array1<f64> = ArrayBase::zeros(0);
         if self.prediction_file.lock().unwrap().is_empty() {
             message = "The testing dataset is missing".to_string();
         } else if self.coefs_path.lock().unwrap().is_empty() {
@@ -217,9 +231,10 @@ impl File for MyServer {
             let model = csv_file::read_file_to_array1(&self.coefs_path.lock().unwrap())
                 .map_err(|e| Status::internal(format!("Failed to read txt file: {}", e)))?;
 
-            let (X_train, y_train, X_test, y_test) = normalize::clean_dataset(content.to_owned());
+            let (_X_train, _y_train, X_test, _y_test) =
+                normalize::clean_dataset(content.to_owned());
 
-            let prediction = training::predict(&model.to_owned(), &X_test);
+            let _prediction = training::predict(&model.to_owned(), &X_test);
         }
 
         let response = file::ResponsePrediction {

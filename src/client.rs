@@ -26,7 +26,7 @@ type HmacSha256 = Hmac<Sha256>;
 async fn upload_file(
     client: &mut FileClient<Channel>,
     file_path: &str,
-    train: bool,
+    train: u32,
     hmac: &mut HmacSha256,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let filepath = std::path::Path::new(&file_path);
@@ -34,20 +34,31 @@ async fn upload_file(
     let filename_ = filepath.file_name().unwrap().to_str().unwrap().to_string();
     println!("Filename: {}", filename_);
 
-    // Check if the file is a CSV file
-    if train && !filename_.ends_with(".csv") {
-        println!("The file must be a CSV file!");
-        return Ok(());
+    let mut serialized_data: Vec<u8> = Vec::new();
+
+    // If the train variable is equal to 1, then the file is a training file
+    // and the server will save it in the training folder
+    if train == 1 || train == 2 {
+        if !filename_.ends_with(".csv") {
+            println!("Training file must be a .csv file!");
+            return Ok(());
+        }
+        // Read the file
+        let content = csv_file::read_csv_file(file_path.to_string())?;
+        // Serialize the records using bincode
+        serialized_data = bincode::serialize(&content)?;
     }
-    if !train && !filename_.ends_with(".txt") {
-        println!("The file must be a TXT file!");
-        return Ok(());
+    if train == 3 {
+        if !filename_.ends_with(".txt") {
+            println!("Prediction file must be a .txt file!");
+            return Ok(());
+        }
+        // Read the file
+        let content = csv_file::read_file_to_array1(&file_path.to_string())?;
+        // Serialize the records using bincode
+        serialized_data = bincode::serialize(&content)?;
     }
 
-    // Read the file
-    let content = csv_file::read_csv_file(file_path.to_string())?;
-    // Serialize the records using bincode
-    let serialized_data = bincode::serialize(&content)?;
     // Split the file into chunks of data to send
     let chunks = serialized_data
         .chunks(1024)
@@ -56,7 +67,7 @@ async fn upload_file(
 
     let request = tonic::Request::new(FileRequest {
         filename: filename_.to_string(),
-        train: train,
+        train: train == 1,
         coefs: filename_.ends_with(".txt"),
     });
 
@@ -103,6 +114,8 @@ async fn upload_file(
         filename: filename_.to_string(),
         hmac_hash: hmac_hash,
     });
+
+    println!("Finishing the transfer...");
 
     client.finish_transfer(newrequest).await?;
 
@@ -153,7 +166,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let client_cert = std::fs::read_to_string("client.crt")?;
     let client_key = std::fs::read_to_string("client.key")?;
     let client_identity = Identity::from_pem(client_cert, client_key);
-    let mut hmac = HmacSha256::new_from_slice(b"secret").expect("HMAC can take key of any size");
 
     let tls = ClientTlsConfig::new()
         .domain_name("localhost")
@@ -185,6 +197,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
         match choice.trim().parse::<u32>() {
             Ok(1 | 2 | 3) => {
+                let mut hmac =
+                    HmacSha256::new_from_slice(b"secret").expect("HMAC can take key of any size");
                 // Ask the user for the name of the file to upload
                 println!("Enter the path of the file to upload:");
                 let mut filepath = String::new();
@@ -193,7 +207,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 upload_file(
                     &mut client,
                     filepath.trim(),
-                    choice.trim().parse::<u32>()? == 1,
+                    choice.trim().parse::<u32>().unwrap(),
                     &mut hmac,
                 )
                 .await?;
