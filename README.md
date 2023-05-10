@@ -53,12 +53,21 @@ Think about potential use cases for secure prediction with secure multiparty com
 How to compile and run the code ? First, you'll need to install a few dependencies:
 
 ```bash
-sudo apt install libssl-dev
-sudo apt install pkg-config
+sudo apt install libssl-dev pkg-config cmake
 ```
 
 Then, you can compile and run the code:
 
 ```bash
-cargo run
+cargo build --release
+```
+To use the server, you'll need to run the following command:
+
+```bash
+./target/release/server <port>
+```
+To use the client, you'll need to run the following command:
+
+```bash
+./target/release/client <ip> <port>
 ```
