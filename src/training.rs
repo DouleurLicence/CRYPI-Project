@@ -32,7 +32,7 @@ pub fn train_log_reg(X_train: &Array2<f64>, y_train: &Array1<f64>) -> Array1<f64
 }
 
 pub fn predict(model: &Array1<f64>, X: &Array2<f64>) -> Array1<f64> {
-    let preds = sigmoid(&(X.dot(model)));
+    let preds = sigmoid(&(X.dot(&model.t())));
     preds.mapv(|p| if p >= 0.5 { 1.0 } else { 0.0 })
 }
 
