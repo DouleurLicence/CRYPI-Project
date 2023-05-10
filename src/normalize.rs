@@ -46,7 +46,7 @@ pub fn normalize_data(records: &[Record]) -> Result<Array2<f32>, Box<dyn Error>>
     Ok(array_data)
 }
 
-fn impute_nan_with_mean(column: &mut Array1<f64>) {
+pub fn impute_nan_with_mean(column: &mut Array1<f64>) {
     let mean = column
         .iter()
         .filter_map(|&x| if x.is_nan() { None } else { Some(x) })

@@ -1,4 +1,5 @@
 use ndarray::{Array1, ArrayBase};
+use ndarray::s;
 use tonic::transport::{Certificate, Identity, Server, ServerTlsConfig};
 use tonic::{Request, Response, Status};
 
@@ -231,10 +232,11 @@ impl File for MyServer {
             let model = csv_file::read_file_to_array1(&self.coefs_path.lock().unwrap())
                 .map_err(|e| Status::internal(format!("Failed to read txt file: {}", e)))?;
 
-            let (_X_train, _y_train, X_test, _y_test) =
-                normalize::clean_dataset(content.to_owned());
-
-            let _prediction = training::predict(&model.to_owned(), &X_test);
+            let dataset = 
+                normalize::normalize_data(&[content.into_iter().nth(0).unwrap()]);
+            // Selection of only the first 10 rows of the dataset
+            let X_test_0 = dataset.unwrap().slice(s![0..1, ..]).to_owned();
+            let _prediction = training::predict(&model.to_owned(), &X_test_0.mapv(|x| x as f64));
         }
 
         let response = file::ResponsePrediction {
